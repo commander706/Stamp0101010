@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NK スタンプカード</title>
+    <style>
+        /* フォントの読み込み */
+        @font-face {
+            font-family: 'Shinonome';
+            src: url('assets/fonts/JF-Dot-ShinonomeMin16B.ttf') format('truetype');
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-image: url('NK.png');
+            background-size: cover;
+            background-position: center;
+            font-family: 'Shinonome', sans-serif;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* パーティクル用キャンバス (紙吹雪 & 爆発) */
+        #confettiCanvas,
+        #explosionCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+        }
+
+        #confettiCanvas {
+            z-index: 10;
+        }
+
+        #explosionCanvas {
+            z-index: 15;
+        }
+
+        #wrapper {
+            position: relative;
+            width: 1100px;
+            height: 700px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transform-origin: center;
+        }
+
+        /* ページネーションボタン (< >) */
+        .nav-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0, 0, 0, 0.6);
+            color: #fff;
+            border: 3px solid #fff;
+            font-size: 40px;
+            font-family: inherit;
+            font-weight: bold;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            cursor: pointer;
+            z-index: 5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        .nav-btn:hover {
+            background: rgba(208, 0, 0, 0.8);
+        }
+
+        .nav-btn:active {
+            transform: translateY(-50%) scale(0.9);
+        }
+
+        #prevBtn {
+            left: -70px;
+        }
+
+        #nextBtn {
+            right: -70px;
+        }
+
+        .hidden-nav {
+            display: none !important;
+        }
+
+        /* アニメーション用コンテナ */
+        #cardContainer {
+            width: 100%;
+            position: relative;
+        }
+
+        .slide-out-left {
+            animation: slideOutLeft 0.6s cubic-bezier(0.8, 0, 0.2, 1) forwards;
+        }
+
+        .slide-in-right {
+            animation: slideInRight 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+        }
+
+        .slide-out-right {
+            animation: slideOutRight 0.6s cubic-bezier(0.8, 0, 0.2, 1) forwards;
+        }
+
+        .slide-in-left {
+            animation: slideInLeft 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+        }
+
+        @keyframes slideOutLeft {
+            0% {
+                transform: translateX(0);
+                opacity: 1;
+            }
+
+            100% {
+                transform: translateX(-150%);
+                opacity: 0;
+            }
+        }
+
+        @keyframes slideInRight {
+            0% {
+                transform: translateX(150%);
+                opacity: 0;
+            }
+
+            100% {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOutRight {
+            0% {
+                transform: translateX(0);
+                opacity: 1;
+            }
+
+            100% {
+                transform: translateX(150%);
+                opacity: 0;
+            }
+        }
+
+        @keyframes slideInLeft {
+            0% {
+                transform: translateX(-150%);
+                opacity: 0;
+            }
+
+            100% {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes appear_rotate {
+            0% {
+                transform: translate(-50%, -50%) scale(0) rotate(0deg);
+            }
+
+            100% {
+                transform: translate(-50%, -50%) scale(1.3) rotate(720deg);
+            }
+        }
+
+        /* 登場後は滑らかに(sin波のように)拡大縮小をループ */
+        @keyframes pulse_smooth {
+            0% {
+                transform: translate(-50%, -50%) scale(1.3) rotate(720deg);
+            }
+
+            100% {
+                transform: translate(-50%, -50%) scale(1.0) rotate(720deg);
+            }
+        }
+
+        @keyframes rainbow_scroll {
+            0% {
+                background-position: 0% 50%;
+            }
+
+            100% {
+                background-position: 100% 50%;
+            }
+        }
+
+        .annoying-rainbow {
+            font-size: 60px;
+            font-weight: bold;
+            background: linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3, #ff0000);
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            animation: rainbow_scroll 0.15s linear infinite;
+            /* 白枠が太すぎて虹色が見えなかったため、極細に変更 */
+            -webkit-text-stroke: 1px #fff;
+            paint-order: stroke fill;
+            /* 黒かった影を白のドロップシャドウに変更して見やすく */
+            filter: drop-shadow(4px 4px 0px #fff);
+            white-space: nowrap;
+        }
+
+        #rainbowOverlay {
+            position: absolute;
+            /* 位置を下げてクリア文字との重なりを解消 */
+            top: 75%;
+            left: 50%;
+            z-index: 25;
+            pointer-events: none;
+            /* 登場アニメ(1回) と 滑らかな脈動ループ を連結 */
+            animation:
+                appear_rotate 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards,
+                pulse_smooth 0.6s ease-in-out 0.6s infinite alternate;
+        }
+
+        /* スタンプカード本体の枠 */
+        .card {
+            background: rgba(230, 240, 240, 0.85);
+            border-radius: 20px;
+            padding: 40px 60px;
+            width: 100%;
+            box-sizing: border-box;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
+        }
+
+        .card-init {
+            opacity: 0;
+            animation: slideUpFade 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+        }
+
+        @keyframes slideUpFade {
+            0% {
+                transform: translateY(50px);
+                opacity: 0;
+            }
+
+            100% {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .text-outline-large {
+            color: #d00000;
+            -webkit-text-stroke: 2px #000;
+            paint-order: stroke fill;
+            line-height: 1.2;
+            padding: 5px;
+        }
+
+        .text-outline-small {
+            color: #d00000;
+            -webkit-text-stroke: 1px #000;
+            paint-order: stroke fill;
+        }
+
+        /* ヘッダー部分 */
+        .header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 50px;
+        }
+
+        .title {
+            font-size: 52px;
+            margin: 0;
+            margin-right: 20px;
+            letter-spacing: 3px;
+        }
+
+        .header-icons {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .header-icons img {
+            width: 50px;
+            height: 50px;
+            object-fit: contain;
+        }
+
+        .header-controls {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .timer-display {
+            font-size: 32px;
+            color: #fff;
+            background: #000;
+            padding: 5px 15px;
+            border-radius: 5px;
+            border: 2px solid #fff;
+            box-shadow: 2px 2px 0 #000;
+            font-variant-numeric: tabular-nums;
+            display: none;
+        }
+
+        .btn {
+            font-family: inherit;
+            font-size: 20px;
+            padding: 8px 16px;
+            background: #000;
+            color: #fff;
+            border: 2px solid #fff;
+            border-radius: 5px;
+            cursor: pointer;
+            box-shadow: 2px 2px 0 #d00000;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+
+        .btn:active {
+            transform: translate(2px, 2px);
+            box-shadow: 0 0 0 transparent;
+        }
+
+        .btn.measuring {
+            background: #d00000;
+            color: #fff;
+            box-shadow: 2px 2px 0 #000;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.7;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
+
+        /* スタンプ枠 */
+        .stamp-board {
+            display: flex;
+            flex-direction: column;
+            gap: 50px;
+        }
+
+        .row {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .item {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 75px;
+        }
+
+        .item-init {
+            opacity: 0;
+            transform: scale(0.5);
+            animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        @keyframes popIn {
+            0% {
+                transform: scale(0.5);
+                opacity: 0;
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .label {
+            position: absolute;
+            top: -30px;
+            font-size: 18px;
+            font-weight: bold;
+            white-space: nowrap;
+            color: #000;
+            z-index: 2;
+        }
+
+        .label-bottom {
+            top: auto;
+            bottom: -30px;
+        }
+
+        .cell {
+            width: 75px;
+            height: 75px;
+            border-radius: 50%;
+            background: rgba(160, 110, 190, 0.7);
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+            transition: background 0.2s;
+        }
+
+        .cell:hover {
+            background: rgba(140, 90, 170, 0.8);
+        }
+
+        .cell.readonly {
+            cursor: default;
+        }
+
+        .cell.readonly:hover {
+            background: rgba(160, 110, 190, 0.7);
+        }
+
+        .stamp-img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            animation: stampPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        @keyframes stampPop {
+            0% {
+                transform: scale(0) rotate(-20deg);
+            }
+
+            100% {
+                transform: scale(1.2) rotate(0deg);
+            }
+        }
+
+        /* ストレス発散用スタンプ */
+        #stressReliefContainer {
+            position: fixed;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            z-index: 5;
+        }
+
+        .stress-text {
+            font-size: 18px;
+            color: #fff;
+            -webkit-text-stroke: 1px #000;
+            paint-order: stroke fill;
+            text-shadow: 2px 2px 0 #000;
+        }
+
+        .stress-cell {
+            width: 80px;
+            height: 80px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.8);
+            transition: opacity 0.1s;
+        }
+
+        /* フッター */
+        .footer {
+            margin-top: 50px;
+            text-align: right;
+        }
+
+        .footer p {
+            font-size: 26px;
+            margin: 0;
+        }
+
+        /* 右下の設定メニュー */
+        .settings-container {
+            position: absolute;
+            bottom: -60px;
+            right: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 10px;
+        }
+
+        .settings-menu {
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #fff;
+            transition: opacity 0.2s;
+        }
+
+        .settings-menu.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .btn-danger {
+            background: #a00;
+            border-color: #fff;
+            font-size: 16px;
+            margin: 0;
+            box-shadow: 2px 2px 0 #000;
+        }
+
+        /* カスタムダイアログ(モーダルUI) */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            opacity: 1;
+            transition: opacity 0.2s;
+        }
+
+        .modal-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .modal-box {
+            background: rgba(230, 240, 240, 0.95);
+            padding: 40px 50px;
+            border-radius: 10px;
+            border: 4px solid #000;
+            box-shadow: 8px 8px 0 rgba(0, 0, 0, 1);
+            text-align: center;
+            max-width: 600px;
+            font-family: 'Shinonome', sans-serif;
+        }
+
+        .modal-text {
+            font-size: 24px;
+            color: #000;
+            margin: 0 0 30px 0;
+            line-height: 1.5;
+            font-weight: bold;
+        }
+
+        .modal-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        /* クリア時のデカ文字演出 */
+        #clearTextOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+            z-index: 20;
+        }
+
+        .clear-text {
+            font-size: 70px;
+            color: #ffeb3b;
+            -webkit-text-stroke: 3px #d00000;
+            paint-order: stroke fill;
+            text-shadow: 6px 6px 0 #000;
+            text-align: center;
+            line-height: 1.2;
+            opacity: 0;
+            transform: scale(0.5);
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .clear-text.show {
+            opacity: 1;
+            transform: scale(1) rotate(-5deg);
+        }
+    </style>
+</head>
+
+<body oncontextmenu="return false;">
+
+    <canvas id="confettiCanvas"></canvas>
+    <canvas id="explosionCanvas"></canvas>
+
+    <div id="wrapper">
+        <button id="prevBtn" class="nav-btn hidden-nav">&lt;</button>
+
+        <div id="cardContainer">
+            <div class="card card-init" id="mainCard">
+                <div class="header">
+                    <h1 id="cardTitle" class="title text-outline-large">NK スタンプカード 1</h1>
+                    <div class="header-icons">
+                        <img src="1n.png" alt="1n"><img src="5n.png" alt="5n"><img src="10n.png" alt="10n">
+                    </div>
+                    <div class="header-controls">
+                        <div id="timerDisplay" class="timer-display">00:00:00</div>
+                        <button id="measureBtn" class="btn">計測</button>
+                    </div>
+                </div>
+                <div class="stamp-board" id="stampBoard"></div>
+                <div class="footer">
+                    <p id="footerText" class="text-outline-large">30個全部埋めてNKスタンプカード2をゲット！！すごい！</p>
+                </div>
+            </div>
+        </div>
+
+        <button id="nextBtn" class="nav-btn hidden-nav">&gt;</button>
+
+        <div id="clearTextOverlay">
+            <div id="clearText" class="clear-text">おめでとう！<br>スタンプカードクリア！</div>
+        </div>
+
+        <div class="settings-container">
+            <div id="settingsMenu" class="settings-menu hidden">
+                <button id="resetBtn" class="btn btn-danger">スタンプデーターをリセット</button>
+            </div>
+            <button id="settingsBtn" class="btn" style="margin:0;">設定</button>
+        </div>
+    </div>
+
+    <!-- ストレス発散用 -->
+    <div id="stressReliefContainer">
+        <div class="stress-text">ストレス発散用</div>
+        <div id="stressItem" class="cell stress-cell">
+            <img src="10n.png" class="stamp-img">
+        </div>
+    </div>
+
+    <div id="modalOverlay" class="modal-overlay hidden">
+        <div class="modal-box">
+            <p id="modalText" class="modal-text"></p>
+            <div class="modal-buttons">
+                <button id="modalBtnOk" class="btn">OK</button>
+                <button id="modalBtnCancel" class="btn btn-danger hidden">キャンセル</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 画像キャッシュ (爆発エフェクト用) ---
+        const imgCache = {};['1n.png', '5n.png', '10n.png'].forEach(src => {
+            const img = new Image(); img.src = src; imgCache[src] = img;
+        });
+
+        // --- 画面リサイズ ---
+        const wrapper = document.getElementById('wrapper');
+        const explCanvas = document.getElementById('explosionCanvas');
+        const confCanvas = document.getElementById('confettiCanvas');
+
+        function resize() {
+            const scale = Math.min(window.innerWidth / 1150, window.innerHeight / 850);
+            wrapper.style.transform = `scale(${scale})`;
+            explCanvas.width = window.innerWidth; explCanvas.height = window.innerHeight;
+            confCanvas.width = window.innerWidth; confCanvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize); resize();
+
+        // --- カスタムモーダル ---
+        const modalOverlay = document.getElementById('modalOverlay');
+        const modalText = document.getElementById('modalText');
+        let modalOkCallback = null;
+
+        function showModal(text, isConfirm = false, onOk = null) {
+            modalText.innerHTML = text.replace(/\n/g, '<br>');
+            modalOkCallback = onOk;
+            document.getElementById('modalBtnCancel').classList.toggle('hidden', !isConfirm);
+            modalOverlay.classList.remove('hidden');
+        }
+        document.getElementById('modalBtnOk').onclick = () => { modalOverlay.classList.add('hidden'); if (modalOkCallback) modalOkCallback(); };
+        document.getElementById('modalBtnCancel').onclick = () => modalOverlay.classList.add('hidden');
+
+
+        // --- 効果音 (Web Audio API) ---
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioContext();
+
+        function playSound(type) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            if (type === 'pop') {
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+            } else if (type === 'explode') {
+                // ド派手な爆発ノイズ音
+                const bufferSize = audioCtx.sampleRate * 0.4;
+                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+
+                const noise = audioCtx.createBufferSource(); noise.buffer = buffer;
+                const filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 800;
+                const gain = audioCtx.createGain();
+                gain.gain.setValueAtTime(0.6, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+
+                noise.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+                noise.start();
+            } else if (type === 'clear') {
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((freq, i) => {
+                    const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
+                    o.connect(g); g.connect(audioCtx.destination);
+                    o.type = 'triangle'; o.frequency.value = freq;
+                    const st = audioCtx.currentTime + i * 0.1;
+                    g.gain.setValueAtTime(0, st); g.gain.linearRampToValueAtTime(0.3, st + 0.05); g.gain.exponentialRampToValueAtTime(0.01, st + 0.3);
+                    o.start(st); o.stop(st + 0.3);
+                });
+            }
+        }
+        document.body.addEventListener('click', () => { if (audioCtx.state === 'suspended') audioCtx.resume(); }, { once: true });
+
+
+        // --- 画像切り刻み＆爆発エフェクト ---
+        const explCtx = explCanvas.getContext('2d');
+        let explParticles = [];
+        let explAnimating = false;
+
+        function explodeImage(rect, src) {
+            const img = imgCache[src];
+            if (!img) return;
+
+            // 20x20 = 計400個の破片に切り刻む（前は10x10）
+            const cols = 20, rows = 20;
+            const cellW = rect.width / cols, cellH = rect.height / rows;
+            const imgCellW = img.width / cols, imgCellH = img.height / rows;
+
+            for (let i = 0; i < cols; i++) {
+                for (let j = 0; j < rows; j++) {
+                    const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+                    const px = rect.left + i * cellW + cellW / 2, py = rect.top + j * cellH + cellH / 2;
+                    const dx = px - cx, dy = py - cy;
+                    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+
+                    const speed = Math.random() * 25 + 10; // 速度もアップ
+                    explParticles.push({
+                        type: 'img', img: img,
+                        sx: i * imgCellW, sy: j * imgCellH, sw: imgCellW, sh: imgCellH,
+                        x: rect.left + i * cellW, y: rect.top + j * cellH, w: cellW, h: cellH,
+                        vx: (dx / dist) * speed + (Math.random() - 0.5) * 15, vy: (dy / dist) * speed + (Math.random() - 0.5) * 15 - 10,
+                        life: 1.0, decay: Math.random() * 0.015 + 0.015,
+                        rot: 0, rotSpeed: (Math.random() - 0.5) * 1.2
+                    });
+                }
+            }
+            // 火花も150個に増量
+            for (let i = 0; i < 150; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 30 + 15;
+                explParticles.push({
+                    type: 'spark',
+                    x: rect.left + rect.width / 2, y: rect.top + rect.height / 2,
+                    vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 5,
+                    life: 1.0, decay: Math.random() * 0.03 + 0.015,
+                    color: ['#fff', '#f00', '#ff0', '#0f0', '#00f', '#f0f'][Math.floor(Math.random() * 6)],
+                    size: Math.random() * 6 + 3
+                });
+            }
+            if (!explAnimating) updateExplosions();
+        }
+
+        function updateExplosions() {
+            explCtx.clearRect(0, 0, explCanvas.width, explCanvas.height);
+            if (explParticles.length === 0) { explAnimating = false; return; }
+            explAnimating = true;
+
+            for (let i = explParticles.length - 1; i >= 0; i--) {
+                const p = explParticles[i];
+                p.vy += 0.6; // 重力
+                p.x += p.vx; p.y += p.vy;
+                p.life -= p.decay;
+
+                if (p.life <= 0) { explParticles.splice(i, 1); continue; }
+
+                explCtx.globalAlpha = p.life;
+                if (p.type === 'img') {
+                    p.rot += p.rotSpeed;
+                    explCtx.save();
+                    explCtx.translate(p.x + p.w / 2, p.y + p.h / 2);
+                    explCtx.rotate(p.rot);
+                    explCtx.drawImage(p.img, p.sx, p.sy, p.sw, p.sh, -p.w / 2, -p.h / 2, p.w, p.h);
+                    explCtx.restore();
+                } else if (p.type === 'spark') {
+                    explCtx.fillStyle = p.color;
+                    explCtx.beginPath(); explCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2); explCtx.fill();
+                }
+            }
+            requestAnimationFrame(updateExplosions);
+        }
+
+        // --- ストレス発散用スタンプ処理 ---
+        const stressItem = document.getElementById('stressItem');
+        const stressImgs = ['1n.png', '5n.png', '10n.png'];
+        stressItem.addEventListener('click', () => {
+            const rect = stressItem.getBoundingClientRect();
+            const src = stressItem.querySelector('img').getAttribute('src');
+
+            playSound('explode');
+            explodeImage(rect, src);
+
+            // 1フレーム後に復活
+            requestAnimationFrame(() => {
+                const nextSrc = stressImgs[Math.floor(Math.random() * stressImgs.length)];
+                stressItem.innerHTML = `<img src="${nextSrc}" class="stamp-img">`;
+                playSound('pop');
+            });
+        });
+
+
+        // --- データと描画ロジック ---
+        let maxLevel = parseInt(localStorage.getItem('nk_max_level')) || 1;
+        let viewingLevel = maxLevel;
+        let savedStamps = JSON.parse(localStorage.getItem('nk_stamp_data')) || Array(30).fill(0);
+        let isAnimating = false;
+
+        const labels = {
+            0: { text: 'START', class: 'text-outline-small' },
+            4: { text: '5時間', class: '' }, 9: { text: '10時間', class: '' },
+            14: { text: '15時間', class: '' }, 19: { text: '20時間', class: '' },
+            24: { text: '25時間', class: '' }, 29: { text: '30時間', class: '' }
+        };
+
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+
+        function updateNavButtons() {
+            prevBtn.classList.toggle('hidden-nav', viewingLevel <= 1);
+            nextBtn.classList.toggle('hidden-nav', viewingLevel >= maxLevel);
+        }
+
+        function renderBoard(isInit = false) {
+            const board = document.getElementById('stampBoard');
+            board.innerHTML = '';
+            document.getElementById('cardTitle').textContent = `NK スタンプカード ${viewingLevel}`;
+            document.getElementById('footerText').textContent = `30個全部埋めてNKスタンプカード${viewingLevel + 1}をゲット！！すごい！`;
+            updateNavButtons();
+
+            let currentRow;
+            for (let i = 0; i < 30; i++) {
+                if (i % 10 === 0) {
+                    currentRow = document.createElement('div');
+                    currentRow.className = 'row';
+                    board.appendChild(currentRow);
+                }
+
+                const item = document.createElement('div');
+                item.className = isInit ? 'item item-init' : 'item';
+                if (isInit) item.style.animationDelay = `${i * 0.03 + 0.5}s`;
+
+                if (labels[i]) {
+                    const label = document.createElement('div');
+                    label.className = `label ${labels[i].class}`;
+                    label.textContent = labels[i].text;
+                    item.appendChild(label);
+                }
+                if (i === 29) {
+                    const startLabel = document.createElement('div');
+                    startLabel.className = 'label text-outline-small label-bottom';
+                    startLabel.textContent = 'START';
+                    item.appendChild(startLabel);
+                }
+
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+
+                let targetImg = '1n.png';
+                if (i === 4 || i === 14 || i === 24) targetImg = '5n.png';
+                if (i === 9 || i === 19 || i === 29) targetImg = '10n.png';
+
+                const isReadOnly = (viewingLevel < maxLevel);
+                const hasStamp = isReadOnly ? true : (savedStamps[i] === 1);
+
+                if (isReadOnly) cell.classList.add('readonly');
+                if (hasStamp) cell.innerHTML = `<img src="${targetImg}" class="stamp-img">`;
+
+                cell.addEventListener('click', () => {
+                    if (isAnimating || isReadOnly) return;
+
+                    if (savedStamps[i] === 0) {
+                        savedStamps[i] = 1;
+                        cell.innerHTML = `<img src="${targetImg}" class="stamp-img">`;
+                        playSound('pop');
+                    } else {
+                        // 爆発エフェクト発動
+                        const rect = cell.getBoundingClientRect();
+                        explodeImage(rect, targetImg);
+                        playSound('explode');
+
+                        savedStamps[i] = 0;
+                        cell.innerHTML = '';
+                    }
+                    localStorage.setItem('nk_stamp_data', JSON.stringify(savedStamps));
+                    checkClear();
+                });
+
+                item.appendChild(cell);
+                currentRow.appendChild(item);
+            }
+        }
+        renderBoard(true);
+
+        const container = document.getElementById('cardContainer');
+        prevBtn.addEventListener('click', () => {
+            if (isAnimating || viewingLevel <= 1) return;
+            isAnimating = true; container.className = 'slide-out-right';
+            setTimeout(() => { viewingLevel--; renderBoard(); container.className = 'slide-in-left'; setTimeout(() => { container.className = ''; isAnimating = false; }, 600); }, 600);
+        });
+        nextBtn.addEventListener('click', () => {
+            if (isAnimating || viewingLevel >= maxLevel) return;
+            isAnimating = true; container.className = 'slide-out-left';
+            setTimeout(() => { viewingLevel++; renderBoard(); container.className = 'slide-in-right'; setTimeout(() => { container.className = ''; isAnimating = false; }, 600); }, 600);
+        });
+
+        function checkClear() {
+            if (savedStamps.every(s => s === 1)) {
+                isAnimating = true;
+                playSound('clear');
+                startConfetti(maxLevel);
+
+                const clearText = document.getElementById('clearText');
+                clearText.classList.add('show');
+
+                // 1秒後に「猛回転＆脈動する虹色テキスト」をドロップ
+                setTimeout(() => {
+                    const rainbowOverlay = document.createElement('div');
+                    rainbowOverlay.id = 'rainbowOverlay';
+                    // CSSで制御するため、style属性は最小限に
+                    rainbowOverlay.innerHTML = `<div class="annoying-rainbow">スタンプカード ${maxLevel + 1} をプレゼント！！</div>`;
+                    document.getElementById('wrapper').appendChild(rainbowOverlay);
+
+                    // 演出を堪能させるための時間 (3秒)
+                    setTimeout(() => {
+                        clearText.classList.remove('show');
+                        rainbowOverlay.remove();
+                        container.className = 'slide-out-left';
+
+                        setTimeout(() => {
+                            maxLevel++; viewingLevel = maxLevel;
+                            localStorage.setItem('nk_max_level', maxLevel);
+                            savedStamps = Array(30).fill(0);
+                            localStorage.setItem('nk_stamp_data', JSON.stringify(savedStamps));
+
+                            renderBoard(); stopConfetti();
+                            container.className = 'slide-in-right';
+                            setTimeout(() => { container.className = ''; isAnimating = false; }, 600);
+                        }, 600);
+                    }, 3000);
+                }, 800);
+            }
+        }
+
+
+        // --- 計測・タイマー機能 ---
+        const measureBtn = document.getElementById('measureBtn');
+        const timerDisplay = document.getElementById('timerDisplay');
+
+        let isMeasuring = localStorage.getItem('nk_is_measuring') === 'true';
+        let startTime = parseInt(localStorage.getItem('nk_start_time')) || 0;
+        let lastNotifiedHour = parseInt(localStorage.getItem('nk_last_notified_hour')) || 0;
+
+        function updateBtnState() {
+            measureBtn.textContent = isMeasuring ? '計測停止' : '計測';
+            measureBtn.classList.toggle('measuring', isMeasuring);
+            timerDisplay.style.display = isMeasuring ? 'block' : 'none';
+        }
+        updateBtnState();
+
+        function loopTimer() {
+            if (isMeasuring) {
+                const elapsed = Date.now() - startTime;
+                const h = Math.floor(elapsed / 3600000).toString().padStart(2, '0');
+                const m = Math.floor((elapsed % 3600000) / 60000).toString().padStart(2, '0');
+                const s = Math.floor((elapsed % 60000) / 1000).toString().padStart(2, '0');
+                timerDisplay.textContent = `${h}:${m}:${s}`;
+
+                const currentHour = Math.floor(elapsed / 3600000);
+                if (currentHour > lastNotifiedHour) {
+                    lastNotifiedHour = currentHour;
+                    localStorage.setItem('nk_last_notified_hour', lastNotifiedHour);
+                    if (Notification.permission === 'granted') {
+                        new Notification('NK スタンプカード', { body: `あなたはNKを ${currentHour}時間 プレイしています。`, icon: '10n.png' });
+                    }
+                }
+            }
+            requestAnimationFrame(loopTimer);
+        }
+        requestAnimationFrame(loopTimer);
+
+        measureBtn.addEventListener('click', async () => {
+            playSound('pop');
+            if (!isMeasuring) {
+                if (Notification.permission === 'default') await Notification.requestPermission();
+                isMeasuring = true; startTime = Date.now(); lastNotifiedHour = 0;
+                localStorage.setItem('nk_is_measuring', 'true');
+                localStorage.setItem('nk_start_time', startTime);
+                localStorage.setItem('nk_last_notified_hour', 0);
+                updateBtnState();
+            } else {
+                isMeasuring = false;
+                const totalMins = Math.floor((Date.now() - startTime) / 60000);
+                const h = Math.floor(totalMins / 60); const m = totalMins % 60;
+
+                // レベルごとのレート計算
+                const earnRate = maxLevel === 1 ? 10 : (maxLevel === 2 ? 30 : 60);
+                const earnedStamps = Math.floor(totalMins / earnRate);
+
+                showModal(`あなたはNKを ${h}時間 ${m}分 遊びました。\n\n(現在のレベルは${earnRate}分で1個なので、\nスタンプ ${earnedStamps} 個分入手できます)`);
+
+                localStorage.removeItem('nk_is_measuring');
+                localStorage.removeItem('nk_start_time');
+                localStorage.removeItem('nk_last_notified_hour');
+                updateBtnState();
+            }
+        });
+
+
+        // --- 設定メニュー ---
+        document.getElementById('settingsBtn').onclick = () => {
+            playSound('pop'); document.getElementById('settingsMenu').classList.toggle('hidden');
+        };
+
+        document.getElementById('resetBtn').onclick = () => {
+            document.getElementById('settingsMenu').classList.add('hidden');
+            showModal('本当にすべてのデータをリセットしますか？\n(カードのレベルも1に戻ります)', true, () => {
+                playSound('explode');
+                localStorage.clear();
+                setTimeout(() => location.reload(), 300);
+            });
+        };
+
+
+        // --- 紙吹雪(Confetti)生成器 ---
+        const confCtx = confCanvas.getContext('2d');
+        let confParticles = [];
+        let confettiActive = false;
+        let confAnimId = null;
+
+        function startConfetti(multiplier) {
+            confettiActive = true; confParticles = [];
+            const colors = ['#e74c3c', '#3498db', '#f1c40f', '#2ecc71', '#9b59b6', '#e67e22'];
+
+            // レベルに応じて紙吹雪の量が倍増する
+            const amount = 150 * multiplier;
+
+            for (let i = 0; i < amount; i++) {
+                confParticles.push({
+                    x: Math.random() * confCanvas.width,
+                    y: Math.random() * confCanvas.height - confCanvas.height,
+                    w: Math.random() * 10 + 5, h: Math.random() * 10 + 5,
+                    vx: Math.random() * 4 - 2, vy: Math.random() * 3 + 2,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    tilt: Math.floor(Math.random() * 10) - 10,
+                    tiltSpeed: (Math.random() * 0.07) + 0.05, tiltAngle: 0
+                });
+            }
+            if (!confAnimId) drawConfetti();
+        }
+
+        function drawConfetti() {
+            confCtx.clearRect(0, 0, confCanvas.width, confCanvas.height);
+            let activeParticles = 0;
+
+            confParticles.forEach((p) => {
+                p.tiltAngle += p.tiltSpeed; p.y += p.vy; p.x += Math.sin(p.tiltAngle) * 2;
+                p.tilt = Math.sin(p.tiltAngle) * 15;
+
+                confCtx.beginPath(); confCtx.lineWidth = p.w; confCtx.strokeStyle = p.color;
+                confCtx.moveTo(p.x + p.tilt + p.w / 2, p.y);
+                confCtx.lineTo(p.x + p.tilt, p.y + p.tilt + p.h / 2);
+                confCtx.stroke();
+
+                if (p.y <= confCanvas.height) {
+                    activeParticles++;
+                } else if (confettiActive) {
+                    p.x = Math.random() * confCanvas.width; p.y = -20;
+                    activeParticles++;
+                }
+            });
+
+            if (activeParticles > 0) confAnimId = requestAnimationFrame(drawConfetti);
+            else { cancelAnimationFrame(confAnimId); confAnimId = null; }
+        }
+
+        function stopConfetti() { confettiActive = false; }
+    </script>
+</body>
+
+</html>
